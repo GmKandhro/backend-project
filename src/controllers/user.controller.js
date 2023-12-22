@@ -11,7 +11,7 @@ const generateAccessTokenAndRefreshToken = async(userId)=>{
  
      const accessToken =  user.generateAccessToken()
      const refreshToken =  user.generateRefreshToken()
- 
+    
      user.refreshToken = refreshToken
      await user.save( {validateBeforeSave: false} )
      return {
@@ -108,7 +108,7 @@ const loginUser = asyncHandler(async(req ,res)=>{
     if(!(username || email)){
         throw new ApiError(400, "username or email is required")
     }
-
+   
    let user = await User.findOne({
         $or:[
             {username},
@@ -117,13 +117,13 @@ const loginUser = asyncHandler(async(req ,res)=>{
     })
 
     if(!user){
-        throw new ApiError(404, "username or email not found")
+        throw new ApiError(404, "user not found with this email or username")
     }
 
     let isPasswordValid = await user.isPasswordCorrect(password)
 
     if(!isPasswordValid){
-        throw new ApiError(401, "unValid password")
+        throw new ApiError(401, "unvalid password")
     }
 
     const { accessToken , refreshToken } = await generateAccessTokenAndRefreshToken(user._id)
@@ -203,6 +203,116 @@ const refreshAccessToken = asyncHandler(async(req ,res)=>{
     
     
 })
+
+const changeCurrentPassword = asyncHandler(async(req, res)=>{
+   const {oldPassword , newPassword}= req.body
+
+    const user = await User.findById(req.user._id)
+
+    const isPasswordMatch = await user.isPasswordCorrect(oldPassword)
+
+    if(!isPasswordMatch){
+        throw new ApiError(400, "unvalid old password")
+    }
+
+
+    user.password = newPassword
+   await user.save({validateBeforeSave: false})
+
+   return res.status(200).json(new ApiResponse(200, {}, "password changed successfully"))
+})
+
+const getCurrnetUser = asyncHandler(async(req, res)=>{
+    const user = await User.findById(req.user._id).select("-password -refreshToken")
+    if(!user){
+        throw new ApiError(404, "user not found")
+    }
+    return res.status(200).json(new ApiResponse(200, user, "user found successfully"))    
+})
+
+const updateAccountDetails = asyncHandler(async(req, res)=>{
+    const {email , fullNmae} = req.body
+
+    if(!email || !fullNmae){
+        throw new ApiError(400, "email and fullNmae are required")
+    }
+
+    const user = await User.findByIdAndUpdate(
+        req.user._id,
+        {
+            $set:{email, fullNmae}
+        },
+        {
+            new : true
+        }
+    
+    )
+  
+
+    return res.status(200).json(new ApiResponse(200, user, "user details updated successfully"))
+})
+
+const updateAvatarImage = asyncHandler(async(req, res)=>{
+    const avatarLocalPath = req.file?.path
+
+    if(!avatarLocalPath){
+        throw new ApiError(400, "avatar image is missing")
+    }
+
+    const avatar = await uploadOnCloudinary(avatarLocalPath)
+
+    if(!avatar){
+        throw new ApiError(400, "something went wrong while uploading avatar image")
+    }
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{avatar:avatar.url}
+        },
+        {
+            new :true
+        }
+    ).select("-password")
+
+    return res.status(200)
+    .json(new ApiResponse(200, user, "user avatar updated successfully"))
+
+})
+
+const updateCoverImage = asyncHandler(async(req, res)=>{
+    const coverImageLocalPath = req.file?.path
+
+    if(!coverImageLocalPath){
+        throw new ApiError(400, "cover image is missing")
+    }
+
+    const coverImage = await uploadOnCloudinary(coverImageLocalPath)
+
+    if(!coverImage){
+        throw new ApiError(400, "something went wrong while uploading cover image")
+    }
+    const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+            $set:{coverImage:coverImage.url}
+        },
+        {
+            new :true
+        }
+    ).select("-password")
+
+    return res.status(200)
+    .json(new ApiResponse(200, user, "coverImage updated successfully"))
+
+})
+
 export  {
-    registerUser, loginUser ,logoutUser, refreshAccessToken
+    registerUser,
+    loginUser,
+    logoutUser,
+    refreshAccessToken,
+    changeCurrentPassword,
+    getCurrnetUser,
+    updateAvatarImage,
+    updateCoverImage
 };
